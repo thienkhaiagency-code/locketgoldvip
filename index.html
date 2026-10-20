@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Locket Gold Editor</title>
+<style>
+  body { font-family: -apple-system, sans-serif; background: #0d1117; color: white; padding: 20px; display: flex; justify-content: center; }
+  .container { max-width: 600px; width: 100%; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+  h1 { color: #e3b341; font-size: 22px; text-align: center; }
+  h2 { font-size: 15px; margin-bottom: 15px; border-bottom: 1px solid #30363d; padding-bottom: 10px; color: #8b949e; }
+  .input-group { margin-bottom: 15px; }
+  label { display: block; font-size: 13px; margin-bottom: 6px; }
+  input[type="text"], input[type="date"] { width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; color: white; border-radius: 6px; box-sizing: border-box; }
+  textarea { width: 100%; height: 350px; padding: 10px; background: #0d1117; border: 1px solid #30363d; color: #7ee787; border-radius: 6px; font-family: monospace; font-size: 12px; margin-top: 10px; }
+  .btn { width: 100%; padding: 15px; background: #e3b341; color: black; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 16px; margin-bottom: 10px; }
+  .link-box { background: #21262d; padding: 10px; border-radius: 6px; word-break: break-all; margin-top: 10px; font-size: 13px; }
+  .link-box a { color: #58a6ff; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Locket Gold Editor</h1>
+  
+  <div class="card">
+    <h2>1. Cấu hình (Tạo Code)</h2>
+    <div class="input-group">
+      <label>Ngày bắt đầu</label>
+      <input type="date" id="startDate" value="2026-02-28">
+    </div>
+    <div class="input-group">
+      <label>Ngày hết hạn</label>
+      <input type="date" id="endDate" value="9999-12-31">
+    </div>
+    <div class="input-group">
+      <label>Link Ảnh bìa (Cover)</label>
+      <input type="text" id="coverUrl" value="https://i.ibb.co/1Yt1Dzzy/Shin-chan-1.png">
+    </div>
+    <div class="input-group">
+      <label>Link Khung viền (Widget)</label>
+      <input type="text" id="frameUrl" value="https://i.ibb.co/1Yt1Dzzy/Shin-chan-1.png">
+    </div>
+    <div class="input-group">
+      <label>Caption</label>
+      <input type="text" id="capText" value="iutdyy">
+    </div>
+    
+    <button class="btn" onclick="generateCode()">Tạo Code & Link Cài Đặt</button>
+  </div>
+
+  <div class="card">
+    <h2>2. Link Raw Cài Vào Shadowrocket</h2>
+    <div id="linkOutput" class="link-box">Bấm nút ở trên để lấy link...</div>
+  </div>
+
+  <div class="card">
+    <h2>3. Code (Copy lên file .js)</h2>
+    <textarea id="output" readonly placeholder="Code sẽ hiện ở đây..."></textarea>
+  </div>
+</div>
+
+<script>
+  function generateCode() {
+    const start = document.getElementById('startDate').value + "T00:00:00Z";
+    const end = document.getElementById('endDate').value + "T23:59:59Z";
+    const cover = document.getElementById('coverUrl').value;
+    const frame = document.getElementById('frameUrl').value;
+    const text = document.getElementById('capText').value;
+
+    const code = `
+function safeJson(s, fb) { try { return JSON.parse(s); } catch { return fb; } }
+function deepMerge(base, patch) { for (const k of Object.keys(patch)) { const v = patch[k]; if (v && typeof v === "object" && !Array.isArray(v) && base[k] && typeof base[k] === "object" && !Array.isArray(base[k])) deepMerge(base[k], v); else base[k] = v; } return base; }
+function setJsonString(e, k, patch) { e[k] = JSON.stringify(deepMerge(safeJson(e[k] || "{}", {}), patch)); }
+function setStr(e, k, v) { e[k] = String(v); }
+
+const startISO = "${start}";
+const endISO = "${end}";
+const fakeSub = { expires_date: endISO, purchase_date: startISO, original_purchase_date: startISO, ownership_type: "PURCHASED", display_name: "locket_1600_1y", is_sandbox: true, store: "app_store" };
+const fakeEnt = { expires_date: endISO, purchase_date: startISO, product_identifier: "locket_1600_1y" };
+
+const rurl = $request.url;
+const body = safeJson($response.body, null);
+
+if (rurl.includes("api.revenuecat.com") && body && body.subscriber) {
+    body.subscriber.subscriptions = body.subscriber.subscriptions || {};
+    body.subscriber.entitlements = body.subscriber.entitlements || {};
+    body.subscriber.subscriptions["locket_1600_1y"] = fakeSub;
+    body.subscriber.entitlements["Gold"] = fakeEnt;
+    $done({ body: JSON.stringify(body) });
+} else if (rurl.includes("firebaseremoteconfig") && body) {
+    body.entries = body.entries || {};
+    const e = body.entries;
+    
+    setStr(e, "profile_badge_visible", "true");
+    setJsonString(e, "subscriptions", { "locket_1600_1y": fakeSub });
+    setJsonString(e, "entitlements", { "Gold": fakeEnt });
+    setJsonString(e, "feature_gates", { app_icon_picker: "enabled", camera_roll: "enabled", camera_theme: "enabled", remove_ads: "enabled", custom_widget_frames: "enabled", video: "enabled", longer_video: "enabled" });
+    setJsonString(e, "camera", { max_duration: 60.0, maxDuration: 60.0 });
+    
+    setStr(e, "profile_cover_url", "${cover}");
+    setStr(e, "profile_cover_image_url", "${cover}");
+    setStr(e, "cover_image", "${cover}");
+    
+    setJsonString(e, "widget_frame_event", { uid: "custom", url: "${frame}", start_at: "2020-01-01T00:00:00", end_at: "2099-12-31T23:59:59" });
+    
+    e.overlay_items = JSON.stringify([{ section: "🎨 Web", items: [{ overlay_id: "cap", source: "remote", caption: { background: { colors: ["#ff416c", "#8a2387"] }, text: "${text}", text_color: "#FFFFFF", type: "static_content" } }] }]);
+    
+    $done({ body: JSON.stringify(body) });
+} else { $done({}); }
+    `;
+    
+    document.getElementById('output').value = code.trim();
+    
+    // Tạo link raw cho Shadowrocket (giả lập link của file .conf)
+    // Vì không có backend, tao sẽ tạo link trực tiếp tới file code này
+    const rawLink = "https://raw.githubusercontent.com/thienkhaiagency-code/locketgold/main/locket.js"; 
+    
+    document.getElementById('linkOutput').innerHTML = `
+      <p>1. Copy đoạn code ở ô số 3.</p>
+      <p>2. Dán lên file <b>locket.js</b> trên GitHub của mày (hoặc tạo file mới).</p>
+      <p>3. Link cài vào Shadowrocket: <br> <a href="${rawLink}" target="_blank">${rawLink}</a></p>
+      <p style="color: #e3b341; font-size: 12px; margin-top: 5px;">*Lưu ý: Bấm Commit trên GitHub để lưu code mới. Link Raw không đổi, nhưng nội dung file sẽ thay đổi.*</p>
+    `;
+  }
+</script>
+</body>
+</html>
